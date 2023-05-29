@@ -1,6 +1,4 @@
-.idea/
-.idea/codeStyles/*
-.idea/**/
+.idea
 *.iml
 *.ipr
 *.iws
