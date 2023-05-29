@@ -1,0 +1,12 @@
+.idea/
+.idea/codeStyles/*
+.idea/**/
+*.iml
+*.ipr
+*.iws
+*.tgz
+*.log
+*.log.*
+*.
+target/
+

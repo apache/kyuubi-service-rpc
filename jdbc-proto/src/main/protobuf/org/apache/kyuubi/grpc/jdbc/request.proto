@@ -1,0 +1,345 @@
+// Licensed to the Apache Software Foundation (ASF) under one
+// or more contributor license agreements.  See the NOTICE file
+// distributed with this work for additional information
+// regarding copyright ownership.  The ASF licenses this file
+// to you under the Apache License, Version 2.0 (the
+// "License"); you may not use this file except in compliance
+// with the License.  You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "org.apache.kyuubi.grpc.jdbc";
+
+message GetCatalogsReq {
+  string connection_id = 1;
+}
+
+message GetSchemasReq {
+  string connection_id = 1;
+  string catalog = 2;
+  string schemaPattern = 3;
+}
+
+message GetTablesReq {
+  string connection_id = 1;
+  string catalog = 2;
+  string schemaPattern = 3;
+  string tableNamePattern = 4;
+  repeated string tableTypes = 5;
+}
+
+message GetTableTypesReq {
+  string connection_id = 1;
+}
+
+message GetTablePrivilegesReq {
+  string connection_id = 1;
+  string catalog = 2;
+  string schemaPattern = 3;
+  string tableNamePattern = 4;
+}
+
+message GetColumnsReq {
+  string connection_id = 1;
+  string catalog = 2;
+  string schemaPattern = 3;
+  string tablePattern = 4;
+  string columnNamePattern = 5;
+}
+
+message GetColumnPrivilegesReq {
+  string connection_id = 1;
+  string catalog = 2;
+  string schema = 3;
+  string table = 4;
+  string columnNamePattern = 5;
+}
+
+message GetVersionColumnsReq {
+  string connection_id = 1;
+  string catalog = 2;
+  string schema = 3;
+  string table = 4;
+}
+
+message GetPseudoColumnsReq {
+  string connection_id = 1;
+  string catalog = 2;
+  string schemaPattern = 3;
+  string tableNamePattern = 4;
+  string columnNamePattern = 5;
+}
+
+message GetFunctionsReq {
+  string connection_id = 1;
+  string catalog = 2;
+  string schemaPattern = 3;
+  string functionNamePattern = 4;
+}
+
+message GetFunctionColumnsReq {
+  string connection_id = 1;
+  string catalog = 2;
+  string schemaPattern = 3;
+  string functionNamePattern = 4;
+  string columnNamePattern = 5;
+}
+
+message GetPrimaryKeysReq {
+  string connection_id = 1;
+  string catalog = 2;
+  string schema = 3;
+  string table = 4;
+}
+
+message GetImportedKeysReq {
+  string connection_id = 1;
+  string catalog = 2;
+  string schema = 3;
+  string table = 4;
+}
+
+message GetExportedKeysReq {
+  string connection_id = 1;
+  string catalog = 2;
+  string schema = 3;
+  string table = 4;
+}
+
+message GetCrossReferenceReq {
+  string connection_id = 1;
+  string primaryCatalog = 2;
+  string primarySchema = 3;
+  string primaryTable = 4;
+  string foreignCatalog = 5;
+  string foreignSchema = 6;
+  string foreignTable = 7;
+}
+
+message GetAttributesReq {
+  string connection_id = 1;
+  string catalog = 2;
+  string schemaPattern = 3;
+  string typeNamePattern = 4;
+  string attributeNamePattern = 5;
+}
+
+message GetBestRowIdentifierReq {
+  string connection_id = 1;
+  string catalog = 2;
+  string schema = 3;
+  string table = 4;
+  uint32 scope = 5;
+  bool nullable = 6;
+}
+
+message GetTypeInfoReq {
+  string connection_id = 1;
+}
+
+message GetIndexInfoReq {
+  string connection_id = 1;
+  string catalog = 2;
+  string schema = 3;
+  string table = 4;
+  bool unique = 5;
+  bool approximate = 6;
+}
+
+message GetUDTsReq {
+  string connection_id = 1;
+  string catalog = 2;
+  string schemaPattern = 3;
+  string typeNamePattern = 4;
+}
+
+message GetSuperTypesReq {
+  string connection_id = 1;
+  string catalog = 2;
+  string schemaPattern = 3;
+  string typeNamePattern = 4;
+}
+
+message GetSuperTablesReq {
+  string connection_id = 1;
+  string catalog = 2;
+  string schemaPattern = 3;
+  string tableNamePattern = 4;
+}
+
+
+message ExecuteSqlReq {
+  string connection_id = 1;
+  // any SQL statement
+  string sql = 2;
+  // java.sql.Statement.getQueryTimeout
+  // the current query timeout limit in seconds; zero means there is
+  // no limit.
+  uint32 queryTimeout = 3;
+  // java.sql.Statement.getMaxRows
+  // Retrieves the maximum number of rows that a ResultSet could have.
+  // If this limit is exceeded, the excess rows are silently dropped.
+  // zero means there is no limit
+  uint32 maxRows = 4;
+}
+
+message GetResultSetSchemaReq {
+  string operation_id = 1;
+}
+
+message GetNextColumnSet {
+  string operation_id = 1;
+  uint32 fetchSize = 2;
+}
+
+/* java.sql.DatabaseMetaData APIs except for those
+ * - Return java.sql.ResultSet
+ *   - java.sql.DatabaseMetaData.getImportedKeys
+ * - JDBC Driver Info
+ *   - java.sql.DatabaseMetaData.getDriverName
+ *   - java.sql.DatabaseMetaData.getDriverVersion
+ *   - java.sql.DatabaseMetaData.getDriverMajorVersion
+ *   - java.sql.DatabaseMetaData.getDriverMinorVersion
+ */
+enum DatabaseMetaData {
+  // java.sql.DatabaseMetaData.allProceduresAreCallable
+  ALL_PROCEDURES_ARE_CALLABLE = 0;
+  // java.sql.DatabaseMetaData.allTablesAreSelectable
+  ALL_TABLES_ARE_SELECTABLE = 1;
+  // java.sql.DatabaseMetaData.getURL
+  URL = 2;
+  // java.sql.DatabaseMetaData.getUserName
+  USERNAME = 3;
+  // java.sql.DatabaseMetaData.isReadOnly
+  IS_READ_ONLY = 4;
+  // java.sql.DatabaseMetaData.nullsAreSortedHigh
+  NULLS_ARE_SORTED_HIGH = 5;
+  // java.sql.DatabaseMetaData.nullsAreSortedLow
+  NULLS_ARE_SORTED_LOW = 6;
+  // java.sql.DatabaseMetaData.nullsAreSortedAtStart
+  NULLS_ARE_SORTED_AT_START = 7;
+  // java.sql.DatabaseMetaData.nullsAreSortedAtEnd
+  NULLS_ARE_SORTED_AT_END = 8;
+  // java.sql.DatabaseMetaData.getDatabaseProductName
+  DATABASE_PRODUCT_NAME = 9;
+  // java.sql.DatabaseMetaData.getDatabaseProductVersion
+  DATABASE_PRODUCT_VERSION = 10;
+  // java.sql.DatabaseMetaData.usesLocalFiles
+  USES_LOCAL_FILES = 11;
+  // java.sql.DatabaseMetaData.usesLocalFilePerTable
+  USES_LOCAL_FILE_PER_TABLE = 12;
+  // java.sql.DatabaseMetaData.supportsMixedCaseIdentifiers
+  SUPPORTS_MIXED_CASE_IDENTIFIERS = 13;
+  // java.sql.DatabaseMetaData.storesUpperCaseIdentifiers
+  STORES_UPPER_CASE_IDENTIFIERS = 14;
+  // java.sql.DatabaseMetaData.storesLowerCaseIdentifiers
+  STORES_LOWER_CASE_IDENTIFIERS = 15;
+  // java.sql.DatabaseMetaData.storesMixedCaseIdentifiers
+  STORES_MIXED_CASE_IDENTIFIERS = 16;
+  // java.sql.DatabaseMetaData.supportsMixedCaseQuotedIdentifiers
+  SUPPORTS_MIXED_CASE_QUOTED_IDENTIFIERS = 17;
+  // java.sql.DatabaseMetaData.storesUpperCaseQuotedIdentifiers
+  STORES_UPPER_CASE_QUOTED_IDENTIFIERS = 18;
+  // java.sql.DatabaseMetaData.storesLowerCaseQuotedIdentifiers
+  STORES_LOWER_CASE_QUOTED_IDENTIFIERS = 19;
+  // java.sql.DatabaseMetaData.storesMixedCaseQuotedIdentifiers
+  STORES_MIXED_CASE_QUOTED_IDENTIFIERS = 20;
+  // java.sql.DatabaseMetaData.getIdentifierQuoteString
+  IDENTIFIER_QUOTE_STRING = 21;
+  // java.sql.DatabaseMetaData.getSQLKeywords
+  SQL_KEYWORDS = 22;
+  // java.sql.DatabaseMetaData.getNumericFunctions
+  NUMERIC_FUNCTIONS = 23;
+  // java.sql.DatabaseMetaData.getStringFunctions
+  STRING_FUNCTIONS = 24;
+  // java.sql.DatabaseMetaData.getSystemFunctions
+  SYSTEM_FUNCTIONS = 25;
+  // java.sql.DatabaseMetaData.getTimeDateFunctions
+  TIME_DATE_FUNCTIONS = 26;
+  // java.sql.DatabaseMetaData.getSearchStringEscape
+  SEARCH_STRING_ESCAPE = 27;
+  // java.sql.DatabaseMetaData.getExtraNameCharacters
+  EXTRA_NAME_CHARACTERS = 28;
+  // java.sql.DatabaseMetaData.supportsAlterTableWithAddColumn
+  SUPPORTS_ALTER_TABLE_WITH_ADD_COLUMN = 29;
+  // java.sql.DatabaseMetaData.supportsAlterTableWithDropColumn
+  SUPPORTS_ALTER_TABLE_WITH_DROP_COLUMN = 30;
+  // java.sql.DatabaseMetaData.supportsColumnAliasing
+  SUPPORTS_COLUMN_ALIASING = 31;
+  // java.sql.DatabaseMetaData.nullPlusNonNullIsNull
+  NULL_PLUS_NON_NULL_IS_NULL = 32;
+  // java.sql.DatabaseMetaData.supportsConvert()
+  // java.sql.DatabaseMetaData.supportsConvert(int, int)
+  SUPPORTS_CONVERT = 33;
+  // java.sql.DatabaseMetaData.supportsTableCorrelationNames
+  SUPPORTS_TABLE_CORRELATION_NAMES = 34;
+  // java.sql.DatabaseMetaData.supportsDifferentTableCorrelationNames
+  SUPPORTS_DIFFERENT_TABLE_CORRELATION_NAMES = 35;
+  // java.sql.DatabaseMetaData.supportsExpressionsInOrderBy
+  SUPPORTS_EXPRESSIONS_IN_ORDER_BY = 36;
+  // java.sql.DatabaseMetaData.supportsOrderByUnrelated
+  SUPPORTS_ORDER_BY_UNRELATED = 37;
+  // java.sql.DatabaseMetaData.supportsGroupBy
+  SUPPORTS_GROUP_BY = 38;
+  // java.sql.DatabaseMetaData.supportsGroupByUnrelated
+  SUPPORTS_GROUP_BY_UNRELATED = 39;
+  // java.sql.DatabaseMetaData.supportsGroupByBeyondSelect
+  SUPPORTS_GROUP_BY_BEYOND_SELECT = 40;
+  // java.sql.DatabaseMetaData.supportsLikeEscapeClause
+  SUPPORTS_LIKE_ESCAPE_CLAUSE = 41;
+  // java.sql.DatabaseMetaData.supportsMultipleResultSets
+  SUPPORTS_MULTIPLE_RESULT_SETS = 42;
+  // java.sql.DatabaseMetaData.supportsMultipleTransactions
+  SUPPORTS_MULTIPLE_TRANSACTIONS = 43;
+  // java.sql.DatabaseMetaData.supportsNonNullableColumns
+  SUPPORTS_NON_NULLABLE_COLUMNS = 44;
+  // java.sql.DatabaseMetaData.supportsMinimumSQLGrammar
+  // java.sql.DatabaseMetaData.supportsCoreSQLGrammar
+  // java.sql.DatabaseMetaData.supportsExtendedSQLGrammar
+  // java.sql.DatabaseMetaData.supportsANSI92IntermediateSQL
+  // java.sql.DatabaseMetaData.supportsANSI92FullSQL
+  // java.sql.DatabaseMetaData.supportsIntegrityEnhancementFacility
+  // java.sql.DatabaseMetaData.supportsOuterJoins
+  // java.sql.DatabaseMetaData.supportsFullOuterJoins
+  // java.sql.DatabaseMetaData.supportsLimitedOuterJoins
+  // java.sql.DatabaseMetaData.getSchemaTerm
+  // java.sql.DatabaseMetaData.getProcedureTerm
+  // java.sql.DatabaseMetaData.getCatalogTerm
+
+}
+
+message NewEngineReq {
+  string connection_id = 1;
+  map<string, string> configs = 2;
+}
+
+message NewEngineResp {
+  string operation_id = 1;
+  map<string, string> configs = 2;
+}
+
+
+
+enum OperationState {
+  INITIALIZED = 0; // operation created
+  INITIALIZE_FAILED = 1; // operation failed to be created
+  SUBMITTED = 2; // operation submitted
+  SUBMIT_FAILED = 3; // operation failed to be submitted
+  RUNNING = 4; // operation running
+  RUNNING_COMPILED = 5;
+  RUNNING_FAILED = 6;
+  SUCCEEDED = 7;
+  CANCELED = 8;
+  CLOSED = 9;
+  TIMEOUT = 10;
+}
+

@@ -1,0 +1,300 @@
+// Licensed to the Apache Software Foundation (ASF) under one
+// or more contributor license agreements.  See the NOTICE file
+// distributed with this work for additional information
+// regarding copyright ownership.  The ASF licenses this file
+// to you under the Apache License, Version 2.0 (the
+// "License"); you may not use this file except in compliance
+// with the License.  You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+import "org/apache/kyuubi/grpc/common/errors.proto";
+import "org/apache/kyuubi/grpc/jdbc/response.proto";
+
+option java_multiple_files = true;
+option java_package = "org.apache.kyuubi.grpc.jdbc.connection";
+
+/*
+ * APIs need for build a service component against java.sql.Connection class
+ * A connection (session) with a specific database. SQL statements are executed and results are
+ * returned within the context of a connection.
+ *
+ * APIs defined in separate sub-protocol:
+ *  - DatabaseMetaData API:
+ *    - getMetaData
+ *  - Statement API:
+ *    - createStatement
+ *    - prepareStatement
+ *    - prepareCall
+ *
+ * TODO: Other Undefined APIs:
+ *  1. createArrayOf
+ *  2. createBlob
+ *  3. createClob
+ *  4. createNClob
+ *  5. createSQLXML
+ *  6. createStruct
+ */
+service Connection {
+  rpc OpenConnection(OpenConnectionReq) returns (DirectStatusResp);
+  rpc CloseConnection(CloseConnectionReq) returns (DirectStatusResp);
+  rpc AbortConnection(AbortConnectionReq) returns (DirectStatusResp);
+  rpc NativeSQL(NativeSQLReq) returns (NativeSQLResp);
+  rpc SetAutoCommit(SetAutoCommitReq) returns (DirectStatusResp);
+  rpc GetAutoCommit(GetAutoCommitReq) returns (GetAutoCommitResp);
+  rpc Commit(CommitReq) returns (DirectStatusResp);
+  rpc Rollback(RollbackReq) returns (DirectStatusResp);
+  rpc SetReadOnly(SetReadOnlyReq) returns (DirectStatusResp);
+  rpc IsReadOnly(IsReadOnlyReq) returns (IsReadOnlyResp);
+  rpc SetCatalog(SetCatalogReq) returns (DirectStatusResp);
+  rpc GetCatalog(GetCatalogReq) returns (GetCatalogResp);
+  rpc SetTransactionIsolation(SetTransactionIsolationReq) returns (DirectStatusResp);
+  rpc GetTransactionIsolation(GetTransactionIsolationReq) returns (GetTransactionIsolationResp);
+  rpc GetWarnings(GetWarningsReq) returns (GetWarningsResp);
+  rpc ClearWarnings(ClearWarningsReq) returns (DirectStatusResp);
+  rpc SetTypeMap(SetTypeMapReq) returns (DirectStatusResp);
+  rpc GetTypeMap(GetTypeMapReq) returns (GetTypeMapResp);
+  rpc SetSchema(SetSchemaReq) returns (DirectStatusResp);
+  rpc GetSchema(GetSchemaReq) returns (GetSchemaResp);
+  rpc SetNetworkTimeout(SetNetworkTimeoutReq) returns (DirectStatusResp);
+  rpc GetNetworkTimeout(GetNetworkTimeoutReq) returns (GetNetworkTimeoutResp);
+  rpc SetHoldability(SetHoldabilityReq) returns (DirectStatusResp);
+  rpc GetHoldability(GetHoldabilityReq) returns (GetHoldabilityResp);
+  rpc SetSavepoint(SetSavepointReq) returns (SetSavepointResp);
+  rpc ReleaseSavepoint(ReleaseSavepointReq) returns (DirectStatusResp);
+  rpc IsValid(IsValidReq) returns (IsValidResp);
+  rpc SetClientInfo(SetClientInfoReq) returns (DirectStatusResp);
+  rpc GetClientInfo(GetClientInfoReq) returns (GetClientInfoResp);
+}
+
+message OpenConnectionReq {
+  string connection_id = 1;
+  map<string, string> configs = 2;
+}
+
+message CloseConnectionReq {
+  string connection_id = 1;
+  map<string, string> configs = 2;
+}
+
+message AbortConnectionReq {
+  string connection_id = 1;
+  map<string, string> configs = 2;
+}
+
+message NativeSQLReq {
+  string connection_id = 1;
+  string sql = 2;
+}
+
+message NativeSQLResp {
+  Status status = 1;
+  string sql = 2;
+}
+
+message SetAutoCommitReq {
+  string connection_id = 1;
+  bool autoCommit = 2;
+}
+
+message GetAutoCommitReq {
+  string connection_id = 1;
+}
+
+message GetAutoCommitResp {
+  Status status = 1;
+  bool autoCommit = 2;
+}
+
+message CommitReq {
+  string connection_id = 1;
+}
+
+message Savepoint {
+  uint32 savepoint_id = 1;
+  string savepoint_name = 2;
+}
+
+message RollbackReq {
+  string connection_id = 1;
+  Savepoint savepoint = 2;
+}
+
+message SetReadOnlyReq {
+  string connection_id = 1;
+  bool read_only = 2;
+}
+
+message IsReadOnlyReq {
+  string connection_id = 1;
+}
+
+message IsReadOnlyResp {
+  Status status = 1;
+  bool read_only = 2;
+}
+
+message SetClientInfoReq {
+  string connection_id = 1;
+  map<string, string> configs = 2;
+}
+
+message GetClientInfoReq {
+  string connection_id = 1;
+}
+
+message GetClientInfoResp {
+  Status status = 1;
+  map<string, string> configs = 2;
+}
+
+message SetCatalogReq {
+  string connection_id = 1;
+  string catalog = 2;
+}
+
+message GetCatalogReq {
+  string connection_id = 1;
+}
+
+message GetCatalogResp {
+  Status status = 1;
+  string catalog = 2;
+}
+
+/*
+ * Attempts to change the transaction isolation level for this Connection object to the one given.
+ * The constants defined in the interface Connection are the possible transaction isolation levels.
+ * @see java.sql.Connection
+ */
+message SetTransactionIsolationReq {
+  string connection_id = 1;
+  // The possible transaction isolation levels
+  // level one of the following <code>Connection</code> constants:
+  // <code>Connection.TRANSACTION_READ_UNCOMMITTED(1)</code>,
+  // <code>Connection.TRANSACTION_READ_COMMITTED(2)</code>,
+  // <code>Connection.TRANSACTION_REPEATABLE_READ(4)</code>, or
+  // <code>Connection.TRANSACTION_SERIALIZABLE(8)</code>.
+  uint32 level = 2;
+}
+
+message GetTransactionIsolationReq {
+  string connection_id = 1;
+}
+
+message GetTransactionIsolationResp {
+  Status status = 1;
+  uint32 level = 2;
+}
+
+message GetWarningsReq {
+  string connection_id = 1;
+}
+
+message GetWarningsResp {
+  Status status = 1;
+  SQLWarning warnings = 2;
+}
+
+
+message ClearWarningsReq {
+  string connection_id = 1;
+}
+
+message TypeClassMap {
+  string type_name = 1;
+  string class_name = 2;
+}
+
+message SetTypeMapReq {
+  string connection_id = 1;
+  map<string, string> type_to_class = 2;
+}
+
+message GetTypeMapReq {
+  string connection_id = 1;
+}
+
+message GetTypeMapResp {
+  Status status = 1;
+  map<string, string> type_to_class = 2;
+}
+
+message SetSchemaReq {
+  string connection_id = 1;
+  string schema = 2;
+}
+
+message GetSchemaReq {
+  string connection_id = 1;
+}
+
+message GetSchemaResp {
+  Status status = 1;
+  string schema = 2;
+}
+
+message SetHoldabilityReq {
+  string connection_id = 1;
+  // one of the following <code>ResultSet</code> constants:
+  // <code>ResultSet.HOLD_CURSORS_OVER_COMMIT</code> or
+  // <code>ResultSet.CLOSE_CURSORS_AT_COMMIT</code>
+  uint32 holdability = 2;
+}
+
+message GetHoldabilityReq {
+  string connection_id = 1;
+}
+
+message GetHoldabilityResp {
+  Status status = 1;
+  uint32 holdability = 2;
+}
+
+message SetNetworkTimeoutReq {
+  string connection_id = 1;
+  // The new network timeout value in milliseconds
+  uint32 milliseconds = 2;
+}
+
+message GetNetworkTimeoutReq {
+  string connection_id = 1;
+}
+
+message GetNetworkTimeoutResp {
+  Status status = 1;
+  uint32 milliseconds = 2;
+}
+
+message ReleaseSavepointReq {
+  string connection_id = 1;
+  Savepoint savepoint = 2;
+}
+
+message SetSavepointReq {
+  string connection_id = 1;
+  string savepoint_name = 2;
+}
+
+message SetSavepointResp {
+  Status status = 1;
+  Savepoint savepoint = 2;
+}
+
+message IsValidReq {
+  string connection_id = 1;
+  uint32 timeout = 2;
+}
+
+message IsValidResp {
+  Status status = 1;
+  bool valid = 2;
+}
