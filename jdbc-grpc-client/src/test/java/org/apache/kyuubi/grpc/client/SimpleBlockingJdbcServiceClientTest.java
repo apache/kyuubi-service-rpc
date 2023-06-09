@@ -10,10 +10,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.io.IOException;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.Assert.*;
@@ -26,6 +23,7 @@ public class SimpleBlockingJdbcServiceClientTest {
   private SimpleBlockingJdbcClient client = null;
   DummyJdbcService dummyFrontendService = new DummyJdbcService();
   TestConnectionService dummyConnectionService = new TestConnectionService();
+  TestStatementService dummyStatementService = new TestStatementService(dummyConnectionService);
 
   public SimpleBlockingJdbcServiceClientTest() throws IOException {
   }
@@ -35,6 +33,7 @@ public class SimpleBlockingJdbcServiceClientTest {
     ServerCredentials serverCredentials = InsecureServerCredentials.create();
     ServerBuilder<?> builder = Grpc.newServerBuilderForPort(port, serverCredentials)
       .addService(dummyConnectionService)
+      .addService(dummyStatementService)
       .addService(dummyFrontendService);
     server = builder.build();
     server.start();
@@ -43,6 +42,7 @@ public class SimpleBlockingJdbcServiceClientTest {
 
   @After
   public void tearDown() {
+    dummyConnectionService.stop();
     if (server != null) {
       try {
         server.awaitTermination(5, TimeUnit.SECONDS);
@@ -63,28 +63,31 @@ public class SimpleBlockingJdbcServiceClientTest {
     Map<String, String> configs = new HashMap<>();
     DirectStatusResp resp = client.openConnection(configs, Optional.empty());
     Status status = resp.getStatus();
-    assertEquals("hello, kyuubi", resp.getIdentifier());
+    String connectionId = resp.getIdentifier();
     assertEquals(StatusCode.OK, status.getStatusCode());
     assertEquals("00000", status.getSqlState());
     assertEquals("Serverless SQL on Lakehouse", resp.getExtraInfoOrThrow("Kyuubi"));
 
     configs.put("apache", "kyuubi");
     configs.put("kent", "yao");
-    DirectStatusResp resp1 = client.openConnection(configs, Optional.of("20181117"));
+    DirectStatusResp resp1 = client.openConnection(configs, Optional.of(connectionId));
     Status status1 = resp1.getStatus();
-    assertEquals("hello, 20181117", resp1.getIdentifier());
+    assertEquals(connectionId, resp1.getIdentifier());
     assertEquals(StatusCode.OK, status1.getStatusCode());
     assertEquals("kyuubi", resp1.getExtraInfoOrThrow("apache"));
   }
 
   @Test
   public void testCloseConnection() {
-    DirectStatusResp resp1 = client.closeConnection("");
+    String connectionId = UUID.randomUUID().toString();
+    DirectStatusResp resp1 = client.closeConnection(connectionId);
     Status resp1Status = resp1.getStatus();
     assertEquals(StatusCode.ERROR, resp1Status.getStatusCode());
     assertEquals("2E000", resp1Status.getSqlState());
-    assertEquals("invalid connection id", resp1Status.getErrorMessage());
-    DirectStatusResp resp2 = client.closeConnection("apache kyuubi");
+    assertEquals("invalid connection id " + connectionId, resp1Status.getErrorMessage());
+    DirectStatusResp openConn = client.openConnection(Collections.emptyMap(), Optional.empty());
+    connectionId = openConn.getIdentifier();
+    DirectStatusResp resp2 = client.closeConnection(connectionId);
     Status resp2Status = resp2.getStatus();
     assertEquals(StatusCode.OK, resp2Status.getStatusCode());
     assertEquals("00000", resp2Status.getSqlState());
@@ -181,7 +184,7 @@ public class SimpleBlockingJdbcServiceClientTest {
   public void testBuildSQLWarnings() {
     java.sql.SQLWarning warning1 = new java.sql.SQLWarning("warning1");
     warning1.setNextWarning(new java.sql.SQLWarning("warning2"));
-    SQLWarning warning = TestConnectionService.buildWarning(warning1);
+    SQLWarning warning = GrpcUtils.toProto(warning1);
     assertEquals("warning1", warning.getReason());
     assertEquals("warning2", warning.getNextWarning().getReason());
   }
@@ -257,5 +260,18 @@ public class SimpleBlockingJdbcServiceClientTest {
   public void testAbortConnection() {
     DirectStatusResp resp = client.abortConnection("kyuubi");
     assertEquals(StatusCode.OK, resp.getStatus().getStatusCode());
+  }
+
+  @Test
+  public void testExecuteQuery() {
+    String sql = "SELECT * FROM UNNEST(ARRAY['a', 'b', 'c'])";
+    DirectStatusResp resp = client.executeQuery("kyuubi", sql);
+    assertEquals(StatusCode.ERROR, resp.getStatus().getStatusCode());
+    assertTrue(resp.getStatus().getErrorMessage().contains("Statement Id kyuubi not found"));
+    DirectStatusResp resp1 = client.createStatement("kyuubi", Optional.empty());
+    String statementId = resp1.getIdentifier();
+    DirectStatusResp resp2 = client.executeQuery(statementId, sql);
+    assertEquals(StatusCode.OK, resp2.getStatus().getStatusCode());
+    client.closeStatement(statementId);
   }
 }

@@ -2,6 +2,7 @@ package org.apache.kyuubi.grpc;
 
 
 import io.grpc.stub.StreamObserver;
+import org.apache.kyuubi.grpc.common.ConnectionHandle;
 import org.apache.kyuubi.grpc.jdbc.*;
 import org.apache.kyuubi.grpc.jdbc.connection.ConnectionGrpc;
 import org.apache.kyuubi.grpc.jdbc.connection.*;
@@ -15,41 +16,56 @@ import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
+import java.util.UUID;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 
 import static org.apache.kyuubi.grpc.GrpcUtils.OK;
 
 public class TestConnectionService extends ConnectionGrpc.ConnectionImplBase {
-
   private final Path _tempDir = Files.createTempDirectory(getClass().getSimpleName());
-
   public String defaultCatalogName = _tempDir.getFileName().toString().toUpperCase();
   private final String jdbcUrl = "jdbc:h2:" + _tempDir + ";MODE=DB2;user=testUser;password=testPass";
-  private Connection _connection = null;
-
-  private final Executor executor = Executors.newSingleThreadExecutor();
-
+  private Map<ConnectionHandle, Connection> connections = new HashMap<>();
+  private Executor executor = Executors.newSingleThreadExecutor();
   private final Map<Savepoint, java.sql.Savepoint> savepoints = new HashMap<>();
-
-  public void setConnection(Connection _connection) {
-    this._connection = _connection;
+  public Connection getConnection(ConnectionHandle connectionId, Properties properties) throws SQLException {
+    if (connections.containsKey(connectionId)) {
+      return connections.get(connectionId);
+    } else {
+      Connection conn = DriverManager.getConnection(jdbcUrl, properties);
+      connections.put(connectionId, conn);
+      return conn;
+    }
   }
 
-  public Connection getConnection() throws SQLException {
-    if (this._connection == null) {
-      Connection conn = DriverManager.getConnection(jdbcUrl);
-      setConnection(conn);
-      return conn;
+  public Connection getConnection(ConnectionHandle connectionId) throws SQLException {
+    if (connections.containsKey(connectionId)) {
+      return connections.get(connectionId);
     } else {
-      return _connection;
+      Connection conn = DriverManager.getConnection(jdbcUrl, new Properties());
+      connections.put(connectionId, conn);
+      return conn;
     }
   }
 
   public TestConnectionService() throws IOException {
   }
 
-  private Status errorStatus(Exception e) {
+  public void stop() {
+    for (Connection conn : connections.values()) {
+      try {
+        conn.close();
+      } catch (SQLException e) {
+        e.printStackTrace();
+      }
+    }
+    connections.clear();
+    connections = null;
+    executor = null;
+  }
+
+  public Status errorStatus(Exception e) {
     return Status.newBuilder()
       .setSqlState("38808")
       .setErrorMessage(e.getMessage())
@@ -57,14 +73,14 @@ public class TestConnectionService extends ConnectionGrpc.ConnectionImplBase {
       .build();
   }
 
-  private DirectStatusResp error(Exception e) {
+  public DirectStatusResp error(Exception e) {
     return DirectStatusResp
       .newBuilder()
       .setStatus(errorStatus(e))
       .build();
   }
 
-  private DirectStatusResp ok(String id) {
+  public DirectStatusResp ok(String id) {
     return DirectStatusResp
       .newBuilder()
       .setStatus(OK)
@@ -75,16 +91,19 @@ public class TestConnectionService extends ConnectionGrpc.ConnectionImplBase {
   @Override
   public void openConnection(OpenConnectionReq req, StreamObserver<DirectStatusResp> respOb) {
     DirectStatusResp.Builder builder = DirectStatusResp.newBuilder();
-    if (req.getConnectionId().isEmpty()) {
-      builder.setIdentifier("hello, kyuubi");
-    } else {
-      builder.setIdentifier("hello, " + req.getConnectionId());
-    }
     try {
+      ConnectionHandle connectionId = null;
       Properties properties = new Properties();
       properties.putAll(req.getConfigsMap());
-      setConnection(
-        DriverManager.getConnection(jdbcUrl, properties));
+      if (req.getConnectionId() == ConnectionHandle.getDefaultInstance()) {
+        connectionId = ConnectionHandle.newBuilder()
+          .setId(UUID.randomUUID().toString())
+          .build();
+      } else {
+        connectionId = req.getConnectionId();
+      }
+      getConnection(connectionId, properties);
+      builder.setIdentifier(connectionId.getId());
       builder.putExtraInfo("apache", "kyuubi");
       builder.putExtraInfo("Kyuubi", "Serverless SQL on Lakehouse");
       builder.setStatus(OK);
@@ -104,20 +123,21 @@ public class TestConnectionService extends ConnectionGrpc.ConnectionImplBase {
   }
 
   @Override
-  public void closeConnection(CloseConnectionReq req, StreamObserver<DirectStatusResp> respOb) {
+  public void closeConnection(ConnectionHandle req, StreamObserver<DirectStatusResp> respOb) {
     DirectStatusResp.Builder builder = DirectStatusResp.newBuilder();
     try {
-      if (req.getConnectionId().isEmpty()) {
-        throw new IllegalArgumentException("ConnectionId cannot be empty for CloseConnection");
+      if (!connections.containsKey(req)) {
+        throw new IllegalArgumentException("invalid connection id " + req.getId());
       } else {
-        builder.setIdentifier(req.getConnectionId());
+        getConnection(req).close();
+        builder.setIdentifier(req.getId());
       }
       builder.setStatus(OK);
     } catch (Exception e) {
       Status status = Status.newBuilder()
         .setStatusCode(StatusCode.ERROR)
         .setSqlState("2E000")
-        .setErrorMessage("invalid connection id" + req.getConnectionId())
+        .setErrorMessage(e.getMessage())
         .build();
       builder.setStatus(status);
     }
@@ -129,7 +149,7 @@ public class TestConnectionService extends ConnectionGrpc.ConnectionImplBase {
   public void nativeSQL(NativeSQLReq request, StreamObserver<NativeSQLResp> responseObserver) {
     NativeSQLResp.Builder builder = NativeSQLResp.newBuilder();
     try {
-      String nativeSQL = getConnection().nativeSQL(request.getSql());
+      String nativeSQL = getConnection(request.getConnectionId()).nativeSQL(request.getSql());
       NativeSQLResp resp = builder
         .setSql(nativeSQL)
         .setStatus(OK)
@@ -150,8 +170,8 @@ public class TestConnectionService extends ConnectionGrpc.ConnectionImplBase {
   @Override
   public void setAutoCommit(SetAutoCommitReq request, StreamObserver<DirectStatusResp> responseObserver) {
     try {
-      getConnection().setAutoCommit(request.getAutoCommit());
-      responseObserver.onNext(ok(request.getConnectionId()));
+      getConnection(request.getConnectionId()).setAutoCommit(request.getAutoCommit());
+      responseObserver.onNext(ok(request.getConnectionId().getId()));
     } catch (SQLException e) {
       responseObserver.onNext(error(e));
     }
@@ -159,10 +179,10 @@ public class TestConnectionService extends ConnectionGrpc.ConnectionImplBase {
   }
 
   @Override
-  public void getAutoCommit(GetAutoCommitReq request, StreamObserver<GetAutoCommitResp> responseObserver) {
+  public void getAutoCommit(ConnectionHandle request, StreamObserver<GetAutoCommitResp> responseObserver) {
     GetAutoCommitResp.Builder builder = GetAutoCommitResp.newBuilder();
     try {
-      boolean autoCommit = getConnection().getAutoCommit();
+      boolean autoCommit = getConnection(request).getAutoCommit();
       GetAutoCommitResp resp = builder
         .setStatus(OK)
         .setAutoCommit(autoCommit)
@@ -175,10 +195,10 @@ public class TestConnectionService extends ConnectionGrpc.ConnectionImplBase {
   }
 
   @Override
-  public void commit(CommitReq request, StreamObserver<DirectStatusResp> responseObserver) {
+  public void commit(ConnectionHandle request, StreamObserver<DirectStatusResp> responseObserver) {
     try {
-      getConnection().commit();
-      responseObserver.onNext(ok(request.getConnectionId()));
+      getConnection(request).commit();
+      responseObserver.onNext(ok(request.getId()));
     } catch (SQLException e) {
       responseObserver.onNext(error(e));
     }
@@ -188,14 +208,14 @@ public class TestConnectionService extends ConnectionGrpc.ConnectionImplBase {
   @Override
   public void rollback(RollbackReq request, StreamObserver<DirectStatusResp> responseObserver) {
     try {
-      Connection conn = getConnection();
+      Connection conn = getConnection(request.getConnectionId());
       Savepoint savepoint = request.getSavepoint();
       if (savepoint == Savepoint.getDefaultInstance()) {
         conn.rollback();
       } else {
         conn.rollback(savepoints.get(savepoint));
       }
-      responseObserver.onNext(ok(request.getConnectionId()));
+      responseObserver.onNext(ok(request.getConnectionId().getId()));
     } catch (SQLException e) {
       responseObserver.onNext(error(e));
     }
@@ -205,8 +225,8 @@ public class TestConnectionService extends ConnectionGrpc.ConnectionImplBase {
   @Override
   public void setReadOnly(SetReadOnlyReq request, StreamObserver<DirectStatusResp> responseObserver) {
     try {
-      getConnection().setReadOnly(request.getReadOnly());
-      responseObserver.onNext(ok(request.getConnectionId()));
+      getConnection(request.getConnectionId()).setReadOnly(request.getReadOnly());
+      responseObserver.onNext(ok(request.getConnectionId().getId()));
     } catch (SQLException e) {
       responseObserver.onNext(error(e));
     }
@@ -214,12 +234,12 @@ public class TestConnectionService extends ConnectionGrpc.ConnectionImplBase {
   }
 
   @Override
-  public void isReadOnly(IsReadOnlyReq request, StreamObserver<IsReadOnlyResp> responseObserver) {
+  public void isReadOnly(ConnectionHandle request, StreamObserver<IsReadOnlyResp> responseObserver) {
     IsReadOnlyResp.Builder builder = IsReadOnlyResp.newBuilder();
     try {
       IsReadOnlyResp resp = builder
         .setStatus(OK)
-        .setReadOnly(getConnection().isReadOnly())
+        .setReadOnly(getConnection(request).isReadOnly())
         .build();
       responseObserver.onNext(resp);
     } catch (SQLException e) {
@@ -234,8 +254,8 @@ public class TestConnectionService extends ConnectionGrpc.ConnectionImplBase {
   @Override
   public void setCatalog(SetCatalogReq request, StreamObserver<DirectStatusResp> responseObserver) {
     try {
-      getConnection().setCatalog(request.getCatalog());
-      responseObserver.onNext(ok(request.getConnectionId()));
+      getConnection(request.getConnectionId()).setCatalog(request.getCatalog());
+      responseObserver.onNext(ok(request.getConnectionId().getId()));
     } catch (SQLException e) {
       responseObserver.onNext(error(e));
     }
@@ -243,10 +263,10 @@ public class TestConnectionService extends ConnectionGrpc.ConnectionImplBase {
   }
 
   @Override
-  public void getCatalog(GetCatalogReq request, StreamObserver<GetCatalogResp> responseObserver) {
+  public void getCatalog(ConnectionHandle request, StreamObserver<GetCatalogResp> responseObserver) {
     GetCatalogResp.Builder builder = GetCatalogResp.newBuilder();
     try {
-      String catalog = getConnection().getCatalog();
+      String catalog = getConnection(request).getCatalog();
       GetCatalogResp resp = builder
         .setStatus(OK)
         .setCatalog(catalog)
@@ -264,8 +284,8 @@ public class TestConnectionService extends ConnectionGrpc.ConnectionImplBase {
   @Override
   public void setTransactionIsolation(SetTransactionIsolationReq request, StreamObserver<DirectStatusResp> responseObserver) {
     try {
-      getConnection().setTransactionIsolation(request.getLevel());
-      responseObserver.onNext(ok(request.getConnectionId()));
+      getConnection(request.getConnectionId()).setTransactionIsolation(request.getLevel());
+      responseObserver.onNext(ok(request.getConnectionId().getId()));
     } catch (SQLException e) {
       responseObserver.onNext(error(e));
     }
@@ -273,10 +293,10 @@ public class TestConnectionService extends ConnectionGrpc.ConnectionImplBase {
   }
 
   @Override
-  public void getTransactionIsolation(GetTransactionIsolationReq request, StreamObserver<GetTransactionIsolationResp> responseObserver) {
+  public void getTransactionIsolation(ConnectionHandle request, StreamObserver<GetTransactionIsolationResp> responseObserver) {
     GetTransactionIsolationResp.Builder builder = GetTransactionIsolationResp.newBuilder();
     try {
-      int level = getConnection().getTransactionIsolation();
+      int level = getConnection(request).getTransactionIsolation();
       GetTransactionIsolationResp resp = builder
         .setStatus(OK)
         .setLevel(level)
@@ -291,30 +311,14 @@ public class TestConnectionService extends ConnectionGrpc.ConnectionImplBase {
     responseObserver.onCompleted();
   }
 
-  public static SQLWarning buildWarning(java.sql.SQLWarning cur) {
-    SQLWarning.Builder builder = SQLWarning.newBuilder();
-    if (cur.getMessage() != null) {
-      builder.setReason(cur.getMessage());
-    }
-    if (cur.getSQLState() != null) {
-      builder.setSqlState(cur.getSQLState());
-    }
-    if (cur.getErrorCode() != 0) {
-      builder.setVendorCode(cur.getErrorCode());
-    }
-    if (cur.getNextWarning() != null) {
-      builder.setNextWarning(buildWarning(cur.getNextWarning()));
-    }
-    return builder.build();
-  }
   @Override
-  public void getWarnings(GetWarningsReq request, StreamObserver<GetWarningsResp> responseObserver) {
+  public void getWarnings(ConnectionHandle request, StreamObserver<GetWarningsResp> responseObserver) {
     GetWarningsResp.Builder builder = GetWarningsResp.newBuilder();
     try {
-      java.sql.SQLWarning warnings = getConnection().getWarnings();
+      SQLWarning warnings = GrpcUtils.toProto(getConnection(request).getWarnings());
 
       if (warnings != null) {
-        builder.setWarnings(buildWarning(getConnection().getWarnings()));
+        builder.setWarnings(warnings);
       }
       responseObserver.onNext(builder.setStatus(OK).build());
     } catch (SQLException e) {
@@ -324,10 +328,10 @@ public class TestConnectionService extends ConnectionGrpc.ConnectionImplBase {
   }
 
   @Override
-  public void clearWarnings(ClearWarningsReq request, StreamObserver<DirectStatusResp> responseObserver) {
+  public void clearWarnings(ConnectionHandle request, StreamObserver<DirectStatusResp> responseObserver) {
     try {
-      getConnection().clearWarnings();
-      responseObserver.onNext(ok(request.getConnectionId()));
+      getConnection(request).clearWarnings();
+      responseObserver.onNext(ok(request.getId()));
     } catch (SQLException e) {
       responseObserver.onNext(error(e));
     }
@@ -342,8 +346,8 @@ public class TestConnectionService extends ConnectionGrpc.ConnectionImplBase {
       for (Map.Entry<String, String> entry : request.getTypeToClassMap().entrySet()) {
         classMap.put(entry.getKey(), Class.forName(entry.getValue()));
       }
-      getConnection().setTypeMap(classMap);
-      responseObserver.onNext(ok(request.getConnectionId()));
+      getConnection(request.getConnectionId()).setTypeMap(classMap);
+      responseObserver.onNext(ok(request.getConnectionId().getId()));
     } catch (Exception e) {
       responseObserver.onNext(error(e));
     }
@@ -351,10 +355,10 @@ public class TestConnectionService extends ConnectionGrpc.ConnectionImplBase {
   }
 
   @Override
-  public void getTypeMap(GetTypeMapReq request, StreamObserver<GetTypeMapResp> responseObserver) {
+  public void getTypeMap(ConnectionHandle request, StreamObserver<GetTypeMapResp> responseObserver) {
     GetTypeMapResp.Builder builder = GetTypeMapResp.newBuilder();
     try {
-      Map<String, Class<?>> typeMap = getConnection().getTypeMap();
+      Map<String, Class<?>> typeMap = getConnection(request).getTypeMap();
       if (typeMap != null) {
         Map<String, String> typeToClassMap = new HashMap<String, String>();
         for (Map.Entry<String, Class<?>> entry : typeMap.entrySet()) {
@@ -373,8 +377,8 @@ public class TestConnectionService extends ConnectionGrpc.ConnectionImplBase {
   @Override
   public void setSchema(SetSchemaReq request, StreamObserver<DirectStatusResp> responseObserver) {
     try {
-      getConnection().setSchema(request.getSchema());
-      responseObserver.onNext(ok(request.getConnectionId()));
+      getConnection(request.getConnectionId()).setSchema(request.getSchema());
+      responseObserver.onNext(ok(request.getConnectionId().getId()));
     } catch (SQLException e) {
       responseObserver.onNext(error(e));
     }
@@ -382,10 +386,10 @@ public class TestConnectionService extends ConnectionGrpc.ConnectionImplBase {
   }
 
   @Override
-  public void getSchema(GetSchemaReq request, StreamObserver<GetSchemaResp> responseObserver) {
+  public void getSchema(ConnectionHandle request, StreamObserver<GetSchemaResp> responseObserver) {
     GetSchemaResp.Builder builder = GetSchemaResp.newBuilder();
     try {
-      String schema = getConnection().getSchema();
+      String schema = getConnection(request).getSchema();
       // schema can be null, can you verify this?
       GetSchemaResp resp = builder
         .setStatus(OK)
@@ -404,8 +408,8 @@ public class TestConnectionService extends ConnectionGrpc.ConnectionImplBase {
   @Override
   public void setNetworkTimeout(SetNetworkTimeoutReq request, StreamObserver<DirectStatusResp> responseObserver) {
      try {
-        getConnection().setNetworkTimeout(executor, request.getMilliseconds());
-        responseObserver.onNext(ok(request.getConnectionId()));
+        getConnection(request.getConnectionId()).setNetworkTimeout(executor, request.getMilliseconds());
+        responseObserver.onNext(ok(request.getConnectionId().getId()));
       } catch (SQLException e) {
         responseObserver.onNext(error(e));
       }
@@ -413,10 +417,10 @@ public class TestConnectionService extends ConnectionGrpc.ConnectionImplBase {
   }
 
   @Override
-  public void getNetworkTimeout(GetNetworkTimeoutReq request, StreamObserver<GetNetworkTimeoutResp> responseObserver) {
+  public void getNetworkTimeout(ConnectionHandle request, StreamObserver<GetNetworkTimeoutResp> responseObserver) {
     GetNetworkTimeoutResp.Builder builder = GetNetworkTimeoutResp.newBuilder();
     try {
-      int timeout = getConnection().getNetworkTimeout();
+      int timeout = getConnection(request).getNetworkTimeout();
       GetNetworkTimeoutResp resp = builder
         .setStatus(OK)
         .setMilliseconds(timeout)
@@ -435,7 +439,7 @@ public class TestConnectionService extends ConnectionGrpc.ConnectionImplBase {
   public void isValid(IsValidReq request, StreamObserver<IsValidResp> responseObserver) {
     IsValidResp.Builder builder = IsValidResp.newBuilder();
     try {
-      boolean valid = getConnection().isValid(request.getTimeout());
+      boolean valid = getConnection(request.getConnectionId()).isValid(request.getTimeout());
       IsValidResp resp = builder
         .setStatus(OK)
         .setValid(valid)
@@ -450,10 +454,10 @@ public class TestConnectionService extends ConnectionGrpc.ConnectionImplBase {
   }
 
   @Override
-  public void abortConnection(AbortConnectionReq request, StreamObserver<DirectStatusResp> responseObserver) {
+  public void abortConnection(ConnectionHandle request, StreamObserver<DirectStatusResp> responseObserver) {
     try {
-      getConnection().abort(executor);
-      responseObserver.onNext(ok(request.getConnectionId()));
+      getConnection(request).abort(executor);
+      responseObserver.onNext(ok(request.getId()));
     } catch (SQLException e) {
       responseObserver.onNext(error(e));
     }
@@ -465,8 +469,8 @@ public class TestConnectionService extends ConnectionGrpc.ConnectionImplBase {
     try {
       Properties properties = new Properties();
       properties.putAll(request.getConfigsMap());
-      getConnection().setClientInfo(properties);
-      responseObserver.onNext(ok(request.getConnectionId()));
+      getConnection(request.getConnectionId()).setClientInfo(properties);
+      responseObserver.onNext(ok(request.getConnectionId().getId()));
     } catch (SQLException e) {
       responseObserver.onNext(error(e));
     }
@@ -474,10 +478,10 @@ public class TestConnectionService extends ConnectionGrpc.ConnectionImplBase {
   }
 
   @Override
-  public void getClientInfo(GetClientInfoReq request, StreamObserver<GetClientInfoResp> responseObserver) {
+  public void getClientInfo(ConnectionHandle request, StreamObserver<GetClientInfoResp> responseObserver) {
     GetClientInfoResp.Builder builder = GetClientInfoResp.newBuilder();
     try {
-      Properties properties = getConnection().getClientInfo();
+      Properties properties = getConnection(request).getClientInfo();
       // use a loop to put all properties into the builder
       for (Map.Entry<Object, Object> entry : properties.entrySet()) {
         builder.putConfigs(entry.getKey().toString(), entry.getValue().toString());
@@ -488,5 +492,4 @@ public class TestConnectionService extends ConnectionGrpc.ConnectionImplBase {
     }
     responseObserver.onCompleted();
   }
-
 }

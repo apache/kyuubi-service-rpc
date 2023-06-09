@@ -1,22 +1,26 @@
 package org.apache.kyuubi.grpc.client;
 
 import io.grpc.*;
+import org.apache.kyuubi.grpc.GetWarningsResp;
+import org.apache.kyuubi.grpc.common.ConnectionHandle;
+import org.apache.kyuubi.grpc.common.StatementHandle;
 import org.apache.kyuubi.grpc.jdbc.*;
 import org.apache.kyuubi.grpc.jdbc.JdbcGrpc.JdbcBlockingStub;
 import org.apache.kyuubi.grpc.jdbc.connection.*;
+import org.apache.kyuubi.grpc.jdbc.statement.*;
 
 import java.util.Map;
 import java.util.Optional;
-import java.util.logging.Logger;
 
 public class SimpleBlockingJdbcClient implements JdbcGrpcClient {
-  private final Logger logger = Logger.getLogger(this.getClass().getName());
   private JdbcBlockingStub blockingStub = null;
   private ConnectionGrpc.ConnectionBlockingStub connectionBlockingStub = null;
+  private StatementGrpc.StatementBlockingStub statementBlockingStub = null;
 
   public SimpleBlockingJdbcClient(Channel channel) {
     blockingStub = JdbcGrpc.newBlockingStub(channel);
     connectionBlockingStub = ConnectionGrpc.newBlockingStub(channel);
+    statementBlockingStub = StatementGrpc.newBlockingStub(channel);
   }
 
   public SimpleBlockingJdbcClient(ManagedChannelBuilder builder) {
@@ -39,12 +43,10 @@ public class SimpleBlockingJdbcClient implements JdbcGrpcClient {
   public DirectStatusResp openConnection(
     Map<String, String> configs,
     Optional<String> connectionId) {
-    OpenConnectionReq.Builder builder = OpenConnectionReq.newBuilder();
-    if (connectionId.isPresent()) {
-      logger.info("Reconnecting to server with existing connection" + connectionId.get());
-      builder.setConnectionId(connectionId.get());
-    }
-    OpenConnectionReq req = builder
+    ConnectionHandle.Builder builder = ConnectionHandle.newBuilder();
+    connectionId.ifPresent(builder::setId);
+    OpenConnectionReq req = OpenConnectionReq.newBuilder()
+      .setConnectionId(builder.build())
       .putAllConfigs(configs)
       .build();
     return connectionBlockingStub.openConnection(req);
@@ -52,18 +54,18 @@ public class SimpleBlockingJdbcClient implements JdbcGrpcClient {
 
   @Override
   public DirectStatusResp closeConnection(String connectionId) {
-    CloseConnectionReq.Builder builder = CloseConnectionReq.newBuilder();
-    CloseConnectionReq req = builder
-      .setConnectionId(connectionId)
+    ConnectionHandle.Builder builder = ConnectionHandle.newBuilder();
+    ConnectionHandle req = builder
+      .setId(connectionId)
       .build();
     return connectionBlockingStub.closeConnection(req);
   }
 
   @Override
   public DirectStatusResp abortConnection(String connectionId) {
-    AbortConnectionReq.Builder builder = AbortConnectionReq.newBuilder();
-    AbortConnectionReq req = builder
-      .setConnectionId(connectionId)
+    ConnectionHandle.Builder builder = ConnectionHandle.newBuilder();
+    ConnectionHandle req = builder
+      .setId(connectionId)
       .build();
     return connectionBlockingStub.abortConnection(req);
   }
@@ -72,7 +74,7 @@ public class SimpleBlockingJdbcClient implements JdbcGrpcClient {
   public DirectStatusResp setClientInfo(String connectionId, Map<String, String> info) {
     SetClientInfoReq.Builder builder = SetClientInfoReq.newBuilder();
     SetClientInfoReq req = builder
-      .setConnectionId(connectionId)
+      .setConnectionId(ConnectionHandle.newBuilder().setId(connectionId).build())
       .putAllConfigs(info)
       .build();
     return connectionBlockingStub.setClientInfo(req);
@@ -82,7 +84,7 @@ public class SimpleBlockingJdbcClient implements JdbcGrpcClient {
   public DirectStatusResp setClientInfo(String connectionId, String name, String value) {
     SetClientInfoReq.Builder builder = SetClientInfoReq.newBuilder();
     SetClientInfoReq req = builder
-      .setConnectionId(connectionId)
+      .setConnectionId(ConnectionHandle.newBuilder().setId(connectionId).build())
       .putConfigs(name, value)
       .build();
     return connectionBlockingStub.setClientInfo(req);
@@ -90,9 +92,8 @@ public class SimpleBlockingJdbcClient implements JdbcGrpcClient {
 
   @Override
   public GetClientInfoResp getClientInfo(String connectionId) {
-    GetClientInfoReq.Builder builder = GetClientInfoReq.newBuilder();
-    GetClientInfoReq req = builder
-      .setConnectionId(connectionId)
+    ConnectionHandle req = ConnectionHandle.newBuilder()
+      .setId(connectionId)
       .build();
     return connectionBlockingStub.getClientInfo(req);
   }
@@ -101,7 +102,7 @@ public class SimpleBlockingJdbcClient implements JdbcGrpcClient {
   public DirectStatusResp setTypeMap(String connectionId, Map<String, String> map) {
     SetTypeMapReq.Builder builder = SetTypeMapReq.newBuilder();
     SetTypeMapReq req = builder
-      .setConnectionId(connectionId)
+      .setConnectionId(ConnectionHandle.newBuilder().setId(connectionId).build())
       .putAllTypeToClass(map)
       .build();
     return connectionBlockingStub.setTypeMap(req);
@@ -109,9 +110,8 @@ public class SimpleBlockingJdbcClient implements JdbcGrpcClient {
 
   @Override
   public GetTypeMapResp getTypeMap(String connectionId) {
-    GetTypeMapReq.Builder builder = GetTypeMapReq.newBuilder();
-    GetTypeMapReq req = builder
-      .setConnectionId(connectionId)
+    ConnectionHandle req = ConnectionHandle.newBuilder()
+      .setId(connectionId)
       .build();
     return connectionBlockingStub.getTypeMap(req);
   }
@@ -120,7 +120,7 @@ public class SimpleBlockingJdbcClient implements JdbcGrpcClient {
   public DirectStatusResp setHoldability(String connectionId, int holdability) {
     SetHoldabilityReq.Builder builder = SetHoldabilityReq.newBuilder();
     SetHoldabilityReq req = builder
-      .setConnectionId(connectionId)
+      .setConnectionId(ConnectionHandle.newBuilder().setId(connectionId).build())
       .setHoldability(holdability)
       .build();
     return connectionBlockingStub.setHoldability(req);
@@ -128,9 +128,8 @@ public class SimpleBlockingJdbcClient implements JdbcGrpcClient {
 
   @Override
   public GetHoldabilityResp getHoldability(String connectionId) {
-    GetHoldabilityReq.Builder builder = GetHoldabilityReq.newBuilder();
-    GetHoldabilityReq req = builder
-      .setConnectionId(connectionId)
+    ConnectionHandle req = ConnectionHandle.newBuilder()
+      .setId(connectionId)
       .build();
     return connectionBlockingStub.getHoldability(req);
   }
@@ -139,7 +138,7 @@ public class SimpleBlockingJdbcClient implements JdbcGrpcClient {
   public DirectStatusResp setSchema(String connectionId, String schema) {
     SetSchemaReq.Builder builder = SetSchemaReq.newBuilder();
     SetSchemaReq req = builder
-      .setConnectionId(connectionId)
+      .setConnectionId(ConnectionHandle.newBuilder().setId(connectionId).build())
       .setSchema(schema)
       .build();
     return connectionBlockingStub.setSchema(req);
@@ -147,9 +146,8 @@ public class SimpleBlockingJdbcClient implements JdbcGrpcClient {
 
   @Override
   public GetSchemaResp getSchema(String connectionId) {
-    GetSchemaReq.Builder builder = GetSchemaReq.newBuilder();
-    GetSchemaReq req = builder
-      .setConnectionId(connectionId)
+    ConnectionHandle req = ConnectionHandle.newBuilder()
+      .setId(connectionId)
       .build();
     return connectionBlockingStub.getSchema(req);
   }
@@ -158,7 +156,7 @@ public class SimpleBlockingJdbcClient implements JdbcGrpcClient {
   public DirectStatusResp setNetworkTimeout(String connectionId, int milliseconds) {
     SetNetworkTimeoutReq.Builder builder = SetNetworkTimeoutReq.newBuilder();
     SetNetworkTimeoutReq req = builder
-      .setConnectionId(connectionId)
+      .setConnectionId(ConnectionHandle.newBuilder().setId(connectionId).build())
       .setMilliseconds(milliseconds)
       .build();
     return connectionBlockingStub.setNetworkTimeout(req);
@@ -166,9 +164,8 @@ public class SimpleBlockingJdbcClient implements JdbcGrpcClient {
 
   @Override
   public GetNetworkTimeoutResp getNetworkTimeout(String connectionId) {
-    GetNetworkTimeoutReq.Builder builder = GetNetworkTimeoutReq.newBuilder();
-    GetNetworkTimeoutReq req = builder
-      .setConnectionId(connectionId)
+    ConnectionHandle req = ConnectionHandle.newBuilder()
+      .setId(connectionId)
       .build();
     return connectionBlockingStub.getNetworkTimeout(req);
   }
@@ -177,7 +174,7 @@ public class SimpleBlockingJdbcClient implements JdbcGrpcClient {
   public SetSavepointResp setSavepoint(String connectionId) {
     SetSavepointReq.Builder builder = SetSavepointReq.newBuilder();
     SetSavepointReq req = builder
-      .setConnectionId(connectionId)
+      .setConnectionId(ConnectionHandle.newBuilder().setId(connectionId).build())
       .build();
     return connectionBlockingStub.setSavepoint(req);
   }
@@ -186,7 +183,7 @@ public class SimpleBlockingJdbcClient implements JdbcGrpcClient {
   public SetSavepointResp setSavepoint(String connectionId, String name) {
     SetSavepointReq.Builder builder = SetSavepointReq.newBuilder();
     SetSavepointReq req = builder
-      .setConnectionId(connectionId)
+      .setConnectionId(ConnectionHandle.newBuilder().setId(connectionId).build())
       .setSavepointName(name)
       .build();
     return connectionBlockingStub.setSavepoint(req);
@@ -196,7 +193,7 @@ public class SimpleBlockingJdbcClient implements JdbcGrpcClient {
   public DirectStatusResp releaseSavepoint(String connectionId, Savepoint savepoint) {
     ReleaseSavepointReq.Builder builder = ReleaseSavepointReq.newBuilder();
     ReleaseSavepointReq req = builder
-      .setConnectionId(connectionId)
+      .setConnectionId(ConnectionHandle.newBuilder().setId(connectionId).build())
       .setSavepoint(savepoint)
       .build();
     return connectionBlockingStub.releaseSavepoint(req);
@@ -207,7 +204,7 @@ public class SimpleBlockingJdbcClient implements JdbcGrpcClient {
   public DirectStatusResp setSchema(String connectionId, String schema, String catalog) {
     SetSchemaReq.Builder builder = SetSchemaReq.newBuilder();
     SetSchemaReq req = builder
-      .setConnectionId(connectionId)
+      .setConnectionId(ConnectionHandle.newBuilder().setId(connectionId).build())
       .setSchema(schema)
       .build();
     return connectionBlockingStub.setSchema(req);
@@ -217,7 +214,7 @@ public class SimpleBlockingJdbcClient implements JdbcGrpcClient {
   public IsValidResp isValid(String connectionId, int timeout) {
     IsValidReq.Builder builder = IsValidReq.newBuilder();
     IsValidReq req = builder
-      .setConnectionId(connectionId)
+      .setConnectionId(ConnectionHandle.newBuilder().setId(connectionId).build())
       .setTimeout(timeout)
       .build();
     return connectionBlockingStub.isValid(req);
@@ -227,7 +224,7 @@ public class SimpleBlockingJdbcClient implements JdbcGrpcClient {
   public NativeSQLResp nativeSQL(String connectionId, String sql) {
     NativeSQLReq.Builder builder = NativeSQLReq.newBuilder();
     NativeSQLReq req = builder
-      .setConnectionId(connectionId)
+      .setConnectionId(ConnectionHandle.newBuilder().setId(connectionId).build())
       .setSql(sql)
       .build();
     return connectionBlockingStub.nativeSQL(req);
@@ -237,7 +234,7 @@ public class SimpleBlockingJdbcClient implements JdbcGrpcClient {
   public DirectStatusResp setAutoCommit(String connectionId, boolean autoCommit) {
     SetAutoCommitReq.Builder builder = SetAutoCommitReq.newBuilder();
     SetAutoCommitReq req = builder
-      .setConnectionId(connectionId)
+      .setConnectionId(ConnectionHandle.newBuilder().setId(connectionId).build())
       .setAutoCommit(autoCommit)
       .build();
     return connectionBlockingStub.setAutoCommit(req);
@@ -245,18 +242,16 @@ public class SimpleBlockingJdbcClient implements JdbcGrpcClient {
 
   @Override
   public GetAutoCommitResp getAutoCommit(String connectionId) {
-    GetAutoCommitReq.Builder builder = GetAutoCommitReq.newBuilder();
-    GetAutoCommitReq req = builder
-      .setConnectionId(connectionId)
+    ConnectionHandle req = ConnectionHandle.newBuilder()
+      .setId(connectionId)
       .build();
     return connectionBlockingStub.getAutoCommit(req);
   }
 
   @Override
   public DirectStatusResp commit(String connectionId) {
-    CommitReq.Builder builder = CommitReq.newBuilder();
-    CommitReq req = builder
-      .setConnectionId(connectionId)
+    ConnectionHandle req = ConnectionHandle.newBuilder()
+      .setId(connectionId)
       .build();
     return connectionBlockingStub.commit(req);
   }
@@ -265,7 +260,7 @@ public class SimpleBlockingJdbcClient implements JdbcGrpcClient {
   public DirectStatusResp rollback(String connectionId) {
     RollbackReq.Builder builder = RollbackReq.newBuilder();
     RollbackReq req = builder
-      .setConnectionId(connectionId)
+      .setConnectionId(ConnectionHandle.newBuilder().setId(connectionId).build())
       .build();
     return connectionBlockingStub.rollback(req);
   }
@@ -276,7 +271,7 @@ public class SimpleBlockingJdbcClient implements JdbcGrpcClient {
       .setSavepointId(savepointId)
       .build();
     RollbackReq req = RollbackReq.newBuilder()
-      .setConnectionId(connectionId)
+      .setConnectionId(ConnectionHandle.newBuilder().setId(connectionId).build())
       .setSavepoint(sp)
       .build();
     return connectionBlockingStub.rollback(req);
@@ -289,7 +284,7 @@ public class SimpleBlockingJdbcClient implements JdbcGrpcClient {
       .setSavepointName(savepointName)
       .build();
     RollbackReq req = RollbackReq.newBuilder()
-      .setConnectionId(connectionId)
+      .setConnectionId(ConnectionHandle.newBuilder().setId(connectionId).build())
       .setSavepoint(sp)
       .build();
     return connectionBlockingStub.rollback(req);
@@ -301,7 +296,7 @@ public class SimpleBlockingJdbcClient implements JdbcGrpcClient {
       .setSavepointName(savepointName)
       .build();
     RollbackReq req = RollbackReq.newBuilder()
-      .setConnectionId(connectionId)
+      .setConnectionId(ConnectionHandle.newBuilder().setId(connectionId).build())
       .setSavepoint(sp)
       .build();
     return connectionBlockingStub.rollback(req);
@@ -311,7 +306,7 @@ public class SimpleBlockingJdbcClient implements JdbcGrpcClient {
   public DirectStatusResp setReadOnly(String connectionId, boolean readOnly) {
     SetReadOnlyReq.Builder builder = SetReadOnlyReq.newBuilder();
     SetReadOnlyReq req = builder
-      .setConnectionId(connectionId)
+      .setConnectionId(ConnectionHandle.newBuilder().setId(connectionId).build())
       .setReadOnly(readOnly)
       .build();
     return connectionBlockingStub.setReadOnly(req);
@@ -319,9 +314,8 @@ public class SimpleBlockingJdbcClient implements JdbcGrpcClient {
 
   @Override
   public IsReadOnlyResp isReadOnly(String connectionId) {
-    IsReadOnlyReq.Builder builder = IsReadOnlyReq.newBuilder();
-    IsReadOnlyReq req = builder
-      .setConnectionId(connectionId)
+    ConnectionHandle req = ConnectionHandle.newBuilder()
+      .setId(connectionId)
       .build();
     return connectionBlockingStub.isReadOnly(req);
   }
@@ -330,7 +324,7 @@ public class SimpleBlockingJdbcClient implements JdbcGrpcClient {
   public DirectStatusResp setCatalog(String connectionId, String catalog) {
     SetCatalogReq.Builder builder = SetCatalogReq.newBuilder();
     SetCatalogReq req = builder
-      .setConnectionId(connectionId)
+      .setConnectionId(ConnectionHandle.newBuilder().setId(connectionId).build())
       .setCatalog(catalog)
       .build();
     return connectionBlockingStub.setCatalog(req);
@@ -338,9 +332,8 @@ public class SimpleBlockingJdbcClient implements JdbcGrpcClient {
 
   @Override
   public GetCatalogResp getCatalog(String connectionId) {
-    GetCatalogReq.Builder builder = GetCatalogReq.newBuilder();
-    GetCatalogReq req = builder
-      .setConnectionId(connectionId)
+    ConnectionHandle req = ConnectionHandle.newBuilder()
+      .setId(connectionId)
       .build();
     return connectionBlockingStub.getCatalog(req);
   }
@@ -350,7 +343,7 @@ public class SimpleBlockingJdbcClient implements JdbcGrpcClient {
   public DirectStatusResp setTransactionIsolation(String connectionId, int level) {
     SetTransactionIsolationReq.Builder builder = SetTransactionIsolationReq.newBuilder();
     SetTransactionIsolationReq req = builder
-      .setConnectionId(connectionId)
+      .setConnectionId(ConnectionHandle.newBuilder().setId(connectionId).build())
       .setLevel(level)
       .build();
     return connectionBlockingStub.setTransactionIsolation(req);
@@ -358,29 +351,56 @@ public class SimpleBlockingJdbcClient implements JdbcGrpcClient {
 
   @Override
   public GetTransactionIsolationResp getTransactionIsolation(String connectionId) {
-    GetTransactionIsolationReq.Builder builder = GetTransactionIsolationReq.newBuilder();
-    GetTransactionIsolationReq req = builder
-      .setConnectionId(connectionId)
+    ConnectionHandle req = ConnectionHandle.newBuilder()
+      .setId(connectionId)
       .build();
     return connectionBlockingStub.getTransactionIsolation(req);
   }
 
   @Override
   public DirectStatusResp clearWarnings(String connectionId) {
-    ClearWarningsReq.Builder builder = ClearWarningsReq.newBuilder();
-    ClearWarningsReq req = builder
-      .setConnectionId(connectionId)
+    ConnectionHandle req = ConnectionHandle.newBuilder()
+      .setId(connectionId)
       .build();
     return connectionBlockingStub.clearWarnings(req);
   }
 
   @Override
   public GetWarningsResp getWarnings(String connectionId) {
-    GetWarningsReq.Builder builder = GetWarningsReq.newBuilder();
-    GetWarningsReq req = builder
-      .setConnectionId(connectionId)
+    ConnectionHandle req = ConnectionHandle.newBuilder()
+      .setId(connectionId)
       .build();
     return connectionBlockingStub.getWarnings(req);
+  }
+
+  public DirectStatusResp createStatement(String connectionId, Optional<String> statementId) {
+    CreateStatementReq.Builder builder = CreateStatementReq.newBuilder();
+    builder.setConnectionId(ConnectionHandle.newBuilder().setId(connectionId).build());
+    if (statementId.isPresent()) {
+      StatementHandle handle = StatementHandle.newBuilder()
+        .setId(statementId.get())
+        .build();
+      builder.setStatementId(handle);
+    }
+    return statementBlockingStub.createStatement(builder.build());
+  }
+
+  public DirectStatusResp closeStatement(String statementId) {
+    StatementHandle req = StatementHandle.newBuilder()
+      .setId(statementId)
+      .build();
+    return statementBlockingStub.closeStatement(req);
+  }
+
+  public DirectStatusResp executeQuery(String statementId, String sql) {
+    StatementHandle handle = StatementHandle.newBuilder()
+      .setId(statementId)
+      .build();
+    ExecuteQueryReq req = ExecuteQueryReq.newBuilder()
+      .setStatementId(handle)
+      .setSql(sql)
+      .build();
+    return statementBlockingStub.executeQuery(req);
   }
 
   @Override

@@ -17,32 +17,16 @@
 syntax = "proto3";
 
 option java_multiple_files = true;
-option java_package = "org.apache.kyuubi.grpc";
+option java_package = "org.apache.kyuubi.grpc.common";
 
-enum StatusCode {
-  OK = 0;
-  ERROR = 1;
+message ConnectionHandle {
+  string id = 1;
 }
 
-message Status {
-  StatusCode status_code = 1;
-  string sql_state = 2;
-  // for legacy jdbc engines
-  uint32 error_code = 3;
-  string error_message = 4;
+message StatementHandle {
+  string id = 1;
 }
 
-message SQLWarning {
-  // a description of the warning
-  string reason = 1;
-  // an XOPEN or SQL:2003 code identifying the warning
-  string sql_state = 2;
-  // a database vendor-specific warning code
-  uint32 vendor_code = 3;
-  SQLWarning next_warning = 4;
-}
-
-message GetWarningsResp {
-  Status status = 1;
-  SQLWarning warnings = 2;
+message OperationHandle {
+  string id = 1;
 }

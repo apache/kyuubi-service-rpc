@@ -104,6 +104,7 @@
                         <pluginArtifact>io.grpc:protoc-gen-grpc-java:1.47.0:exe:${os.detected.classifier}</pluginArtifact>
                         <protocArtifact>com.google.protobuf:protoc:3.21.1:exe:${os.detected.classifier}</protocArtifact>
                         <protoSourceRoot>src/main/protobuf/</protoSourceRoot>
+                        <pluginParameter>--escape_quotes</pluginParameter>
                     </configuration>
                     <executions>
                         <execution>

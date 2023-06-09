@@ -3,6 +3,7 @@ package org.apache.kyuubi.grpc.client;
 import java.util.Map;
 import java.util.Optional;
 
+import org.apache.kyuubi.grpc.GetWarningsResp;
 import org.apache.kyuubi.grpc.jdbc.DirectStatusResp;
 import org.apache.kyuubi.grpc.jdbc.connection.*;
 

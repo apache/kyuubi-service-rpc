@@ -17,6 +17,7 @@
 syntax = "proto3";
 
 import "org/apache/kyuubi/grpc/common/errors.proto";
+import "org/apache/kyuubi/grpc/jdbc/common.proto";
 import "org/apache/kyuubi/grpc/jdbc/response.proto";
 
 option java_multiple_files = true;
@@ -45,53 +46,43 @@ option java_package = "org.apache.kyuubi.grpc.jdbc.connection";
  */
 service Connection {
   rpc OpenConnection(OpenConnectionReq) returns (DirectStatusResp);
-  rpc CloseConnection(CloseConnectionReq) returns (DirectStatusResp);
-  rpc AbortConnection(AbortConnectionReq) returns (DirectStatusResp);
+  rpc CloseConnection(ConnectionHandle) returns (DirectStatusResp);
+  rpc AbortConnection(ConnectionHandle) returns (DirectStatusResp);
   rpc NativeSQL(NativeSQLReq) returns (NativeSQLResp);
   rpc SetAutoCommit(SetAutoCommitReq) returns (DirectStatusResp);
-  rpc GetAutoCommit(GetAutoCommitReq) returns (GetAutoCommitResp);
-  rpc Commit(CommitReq) returns (DirectStatusResp);
+  rpc GetAutoCommit(ConnectionHandle) returns (GetAutoCommitResp);
+  rpc Commit(ConnectionHandle) returns (DirectStatusResp);
   rpc Rollback(RollbackReq) returns (DirectStatusResp);
   rpc SetReadOnly(SetReadOnlyReq) returns (DirectStatusResp);
-  rpc IsReadOnly(IsReadOnlyReq) returns (IsReadOnlyResp);
+  rpc IsReadOnly(ConnectionHandle) returns (IsReadOnlyResp);
   rpc SetCatalog(SetCatalogReq) returns (DirectStatusResp);
-  rpc GetCatalog(GetCatalogReq) returns (GetCatalogResp);
+  rpc GetCatalog(ConnectionHandle) returns (GetCatalogResp);
   rpc SetTransactionIsolation(SetTransactionIsolationReq) returns (DirectStatusResp);
-  rpc GetTransactionIsolation(GetTransactionIsolationReq) returns (GetTransactionIsolationResp);
-  rpc GetWarnings(GetWarningsReq) returns (GetWarningsResp);
-  rpc ClearWarnings(ClearWarningsReq) returns (DirectStatusResp);
+  rpc GetTransactionIsolation(ConnectionHandle) returns (GetTransactionIsolationResp);
+  rpc GetWarnings(ConnectionHandle) returns (GetWarningsResp);
+  rpc ClearWarnings(ConnectionHandle) returns (DirectStatusResp);
   rpc SetTypeMap(SetTypeMapReq) returns (DirectStatusResp);
-  rpc GetTypeMap(GetTypeMapReq) returns (GetTypeMapResp);
+  rpc GetTypeMap(ConnectionHandle) returns (GetTypeMapResp);
   rpc SetSchema(SetSchemaReq) returns (DirectStatusResp);
-  rpc GetSchema(GetSchemaReq) returns (GetSchemaResp);
+  rpc GetSchema(ConnectionHandle) returns (GetSchemaResp);
   rpc SetNetworkTimeout(SetNetworkTimeoutReq) returns (DirectStatusResp);
-  rpc GetNetworkTimeout(GetNetworkTimeoutReq) returns (GetNetworkTimeoutResp);
+  rpc GetNetworkTimeout(ConnectionHandle) returns (GetNetworkTimeoutResp);
   rpc SetHoldability(SetHoldabilityReq) returns (DirectStatusResp);
-  rpc GetHoldability(GetHoldabilityReq) returns (GetHoldabilityResp);
+  rpc GetHoldability(ConnectionHandle) returns (GetHoldabilityResp);
   rpc SetSavepoint(SetSavepointReq) returns (SetSavepointResp);
   rpc ReleaseSavepoint(ReleaseSavepointReq) returns (DirectStatusResp);
   rpc IsValid(IsValidReq) returns (IsValidResp);
   rpc SetClientInfo(SetClientInfoReq) returns (DirectStatusResp);
-  rpc GetClientInfo(GetClientInfoReq) returns (GetClientInfoResp);
+  rpc GetClientInfo(ConnectionHandle) returns (GetClientInfoResp);
 }
 
 message OpenConnectionReq {
-  string connection_id = 1;
-  map<string, string> configs = 2;
-}
-
-message CloseConnectionReq {
-  string connection_id = 1;
-  map<string, string> configs = 2;
-}
-
-message AbortConnectionReq {
-  string connection_id = 1;
+  ConnectionHandle connection_id = 1;
   map<string, string> configs = 2;
 }
 
 message NativeSQLReq {
-  string connection_id = 1;
+  ConnectionHandle connection_id = 1;
   string sql = 2;
 }
 
@@ -101,21 +92,13 @@ message NativeSQLResp {
 }
 
 message SetAutoCommitReq {
-  string connection_id = 1;
+  ConnectionHandle connection_id = 1;
   bool autoCommit = 2;
-}
-
-message GetAutoCommitReq {
-  string connection_id = 1;
 }
 
 message GetAutoCommitResp {
   Status status = 1;
   bool autoCommit = 2;
-}
-
-message CommitReq {
-  string connection_id = 1;
 }
 
 message Savepoint {
@@ -124,17 +107,13 @@ message Savepoint {
 }
 
 message RollbackReq {
-  string connection_id = 1;
+  ConnectionHandle connection_id = 1;
   Savepoint savepoint = 2;
 }
 
 message SetReadOnlyReq {
-  string connection_id = 1;
+  ConnectionHandle connection_id = 1;
   bool read_only = 2;
-}
-
-message IsReadOnlyReq {
-  string connection_id = 1;
 }
 
 message IsReadOnlyResp {
@@ -143,12 +122,8 @@ message IsReadOnlyResp {
 }
 
 message SetClientInfoReq {
-  string connection_id = 1;
+  ConnectionHandle connection_id = 1;
   map<string, string> configs = 2;
-}
-
-message GetClientInfoReq {
-  string connection_id = 1;
 }
 
 message GetClientInfoResp {
@@ -157,12 +132,8 @@ message GetClientInfoResp {
 }
 
 message SetCatalogReq {
-  string connection_id = 1;
+  ConnectionHandle connection_id = 1;
   string catalog = 2;
-}
-
-message GetCatalogReq {
-  string connection_id = 1;
 }
 
 message GetCatalogResp {
@@ -176,7 +147,7 @@ message GetCatalogResp {
  * @see java.sql.Connection
  */
 message SetTransactionIsolationReq {
-  string connection_id = 1;
+  ConnectionHandle connection_id = 1;
   // The possible transaction isolation levels
   // level one of the following <code>Connection</code> constants:
   // <code>Connection.TRANSACTION_READ_UNCOMMITTED(1)</code>,
@@ -186,27 +157,9 @@ message SetTransactionIsolationReq {
   uint32 level = 2;
 }
 
-message GetTransactionIsolationReq {
-  string connection_id = 1;
-}
-
 message GetTransactionIsolationResp {
   Status status = 1;
   uint32 level = 2;
-}
-
-message GetWarningsReq {
-  string connection_id = 1;
-}
-
-message GetWarningsResp {
-  Status status = 1;
-  SQLWarning warnings = 2;
-}
-
-
-message ClearWarningsReq {
-  string connection_id = 1;
 }
 
 message TypeClassMap {
@@ -215,12 +168,8 @@ message TypeClassMap {
 }
 
 message SetTypeMapReq {
-  string connection_id = 1;
+  ConnectionHandle connection_id = 1;
   map<string, string> type_to_class = 2;
-}
-
-message GetTypeMapReq {
-  string connection_id = 1;
 }
 
 message GetTypeMapResp {
@@ -229,12 +178,8 @@ message GetTypeMapResp {
 }
 
 message SetSchemaReq {
-  string connection_id = 1;
+  ConnectionHandle connection_id = 1;
   string schema = 2;
-}
-
-message GetSchemaReq {
-  string connection_id = 1;
 }
 
 message GetSchemaResp {
@@ -243,15 +188,11 @@ message GetSchemaResp {
 }
 
 message SetHoldabilityReq {
-  string connection_id = 1;
+  ConnectionHandle connection_id = 1;
   // one of the following <code>ResultSet</code> constants:
   // <code>ResultSet.HOLD_CURSORS_OVER_COMMIT</code> or
   // <code>ResultSet.CLOSE_CURSORS_AT_COMMIT</code>
   uint32 holdability = 2;
-}
-
-message GetHoldabilityReq {
-  string connection_id = 1;
 }
 
 message GetHoldabilityResp {
@@ -260,13 +201,9 @@ message GetHoldabilityResp {
 }
 
 message SetNetworkTimeoutReq {
-  string connection_id = 1;
+  ConnectionHandle connection_id = 1;
   // The new network timeout value in milliseconds
   uint32 milliseconds = 2;
-}
-
-message GetNetworkTimeoutReq {
-  string connection_id = 1;
 }
 
 message GetNetworkTimeoutResp {
@@ -275,12 +212,12 @@ message GetNetworkTimeoutResp {
 }
 
 message ReleaseSavepointReq {
-  string connection_id = 1;
+  ConnectionHandle connection_id = 1;
   Savepoint savepoint = 2;
 }
 
 message SetSavepointReq {
-  string connection_id = 1;
+  ConnectionHandle connection_id = 1;
   string savepoint_name = 2;
 }
 
@@ -290,7 +227,7 @@ message SetSavepointResp {
 }
 
 message IsValidReq {
-  string connection_id = 1;
+  ConnectionHandle connection_id = 1;
   uint32 timeout = 2;
 }
 

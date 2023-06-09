@@ -15,8 +15,6 @@ public class DummyJdbcService extends JdbcImplBase {
   public DummyJdbcService() throws IOException {
   }
 
-
-
   @Override
   public void getCatalogs(GetCatalogsReq req, StreamObserver<DirectStatusResp> respOb) {
     DirectStatusResp.Builder builder = DirectStatusResp.newBuilder();
